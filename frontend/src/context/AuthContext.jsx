@@ -7,7 +7,7 @@ const USER_KEY = 'auth_user'
 
 export function AuthProvider({ children }) {
 	const [token, setToken] = useState(null)
-	const [user, setUser] = useState(null) // { id, email, role, emailVerified }
+	const [user, setUser] = useState(null) // { id, email, role, emailVerified, avatar, phone, address, zipCode, gender, dateOfBirth }
 	const [loading, setLoading] = useState(true)
 
 	useEffect(() => {

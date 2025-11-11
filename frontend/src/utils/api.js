@@ -9,8 +9,15 @@ async function request(path, { method = 'GET', headers = {}, body, token, isForm
 	// Build absolute or relative URL safely
 	const url = path.startsWith('http') ? path : `${API}${path.startsWith('/') ? '' : '/'}${path}`
 	const finalHeaders = { ...headers }
-	if (!isFormData) finalHeaders['Content-Type'] = 'application/json'
-	if (token) finalHeaders.Authorization = `Bearer ${token}`
+
+	// Don't set Content-Type for FormData - browser will set it with boundary
+	if (!isFormData) {
+		finalHeaders['Content-Type'] = 'application/json'
+	}
+
+	if (token) {
+		finalHeaders.Authorization = `Bearer ${token}`
+	}
 
 	const res = await fetch(url, {
 		method,
@@ -64,7 +71,114 @@ export function meApi({ token }) {
 	return request('/auth/me', { method: 'GET', token })
 }
 
+export function updateProfileApi({ token, name, password, avatarFile, phone, address, zipCode, gender, dateOfBirth }) {
+	const form = new FormData()
+	if (name) form.append('name', name)
+	if (password) form.append('password', password)
+	if (avatarFile) form.append('avatar', avatarFile)
+	if (phone !== undefined) form.append('phone', phone)
+	if (address !== undefined) form.append('address', address)
+	if (zipCode !== undefined) form.append('zipCode', zipCode)
+	if (gender) form.append('gender', gender)
+	if (dateOfBirth) form.append('dateOfBirth', dateOfBirth)
+	return request('/auth/me', { method: 'PUT', body: form, token, isFormData: true })
+}
+
 export function verifyEmailApi({ token }) {
 	// backend expects GET /auth/verify-email/:token
 	return request(`/auth/verify-email/${token}`, { method: 'GET' })
+}
+
+// Products API
+export function getProductsApi({ keyword = '', category = '', brand = '', type = '', minPrice = '', maxPrice = '', page = 1 } = {}) {
+	let queryParams = []
+	if (keyword) queryParams.push(`keyword=${encodeURIComponent(keyword)}`)
+	if (category) queryParams.push(`category=${encodeURIComponent(category)}`)
+	if (brand) queryParams.push(`brand=${encodeURIComponent(brand)}`)
+	if (type) queryParams.push(`type=${encodeURIComponent(type)}`)
+	if (minPrice) queryParams.push(`minPrice=${minPrice}`)
+	if (maxPrice) queryParams.push(`maxPrice=${maxPrice}`)
+	if (page) queryParams.push(`page=${page}`)
+
+	const query = queryParams.length > 0 ? `?${queryParams.join('&')}` : ''
+	return request(`/products${query}`, { method: 'GET' })
+}
+
+export function getProductApi(id) {
+	return request(`/products/${id}`, { method: 'GET' })
+}
+
+export function createProductApi({ token, productData, images }) {
+	const formData = new FormData()
+
+	// Append all product data fields
+	Object.keys(productData).forEach(key => {
+		const value = productData[key]
+		if (value !== null && value !== undefined && value !== '') {
+			formData.append(key, value)
+		}
+	})
+
+	// Append images if provided
+	if (images && images.length > 0) {
+		images.forEach(image => {
+			if (image) {
+				formData.append('images', image)
+			}
+		})
+	}
+
+	return request('/products', { method: 'POST', body: formData, token, isFormData: true })
+}
+
+export function updateProductApi({ token, id, productData, images }) {
+	const formData = new FormData()
+	Object.keys(productData).forEach(key => {
+		if (productData[key] !== undefined && productData[key] !== null) {
+			formData.append(key, productData[key])
+		}
+	})
+	if (images && images.length > 0) {
+		images.forEach(image => {
+			formData.append('images', image)
+		})
+	}
+	return request(`/products/${id}`, { method: 'PUT', body: formData, token, isFormData: true })
+}
+
+export function deleteProductApi({ token, id }) {
+	return request(`/products/${id}`, { method: 'DELETE', token })
+}
+
+// Admin user management APIs
+export function getAllUsersApi({ token }) {
+	return request('/admin/users', { method: 'GET', token })
+}
+
+export function updateUserApi({ token, id, role, isActive }) {
+	const body = {}
+	if (typeof role !== 'undefined') body.role = role
+	if (typeof isActive !== 'undefined') body.isActive = isActive
+	return request(`/admin/user/${id}`, { method: 'PUT', token, body })
+}
+
+// Cart API functions
+export function addToCartApi({ token, productId, quantity = 1 }) {
+	return request('/cart', { method: 'POST', token, body: { productId, quantity } })
+}
+
+export function getCartApi({ token }) {
+	return request('/cart', { method: 'GET', token })
+}
+
+export function updateCartItemApi({ token, itemId, quantity }) {
+	return request(`/cart/${itemId}`, { method: 'PUT', token, body: { quantity } })
+}
+
+export function removeFromCartApi({ token, itemId }) {
+	return request(`/cart/${itemId}`, { method: 'DELETE', token })
+}
+
+export function clearCartApi({ token }) {
+	return request('/cart', { method: 'DELETE', token })
 }

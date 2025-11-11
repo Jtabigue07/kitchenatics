@@ -25,10 +25,36 @@ const userSchema = new mongoose.Schema({
 		public_id: String,
 		url: String
 	},
+	phone: {
+		type: String,
+		trim: true
+	},
+	address: {
+		type: String,
+		trim: true
+	},
+	zipCode: {
+		type: String,
+		trim: true
+	},
+	gender: {
+		type: String,
+		enum: ['male', 'female', 'other', 'prefer-not-to-say'],
+		default: 'prefer-not-to-say'
+	},
+	dateOfBirth: {
+		type: Date
+	},
 	role: {
 		type: String,
 		enum: ['user', 'admin'],
 		default: 'user'
+	},
+
+	// Account active/inactive status. Admins can toggle this.
+	isActive: {
+		type: Boolean,
+		default: true
 	},
 	emailVerified: {
 		type: Boolean,

@@ -238,7 +238,12 @@ exports.getMe = async (req, res) => {
 				email: user.email,
 				role: user.role,
 				emailVerified: user.emailVerified,
-				avatar: user.avatar
+				avatar: user.avatar,
+				phone: user.phone,
+				address: user.address,
+				zipCode: user.zipCode,
+				gender: user.gender,
+				dateOfBirth: user.dateOfBirth
 			}
 		});
 	} catch (error) {
@@ -246,6 +251,62 @@ exports.getMe = async (req, res) => {
 			success: false,
 			message: error.message
 		});
+	}
+};
+
+// Update current user's profile (name, password) and upload avatar
+exports.updateProfile = async (req, res) => {
+	try {
+		const user = await User.findById(req.user.id);
+		if (!user) {
+			return res.status(404).json({ success: false, message: 'User not found' });
+		}
+
+		const { name, password, phone, address, zipCode, gender, dateOfBirth } = req.body;
+		if (name) user.name = name;
+		if (password) user.password = password;
+		if (phone !== undefined) user.phone = phone;
+		if (address !== undefined) user.address = address;
+		if (zipCode !== undefined) user.zipCode = zipCode;
+		if (gender) user.gender = gender;
+		if (dateOfBirth) user.dateOfBirth = new Date(dateOfBirth);
+
+		// Handle avatar upload if provided
+		if (req.file) {
+			const result = await new Promise((resolve, reject) => {
+				const uploadStream = cloudinary.uploader.upload_stream({ folder: 'avatars' }, (error, result) => {
+					if (error) reject(error);
+					else resolve(result);
+				});
+				uploadStream.end(req.file.buffer);
+			});
+
+			user.avatar = {
+				public_id: result.public_id,
+				url: result.secure_url
+			};
+		}
+
+		await user.save();
+
+		res.status(200).json({
+			success: true,
+			user: {
+				id: user._id,
+				name: user.name,
+				email: user.email,
+				role: user.role,
+				emailVerified: user.emailVerified,
+				avatar: user.avatar,
+				phone: user.phone,
+				address: user.address,
+				zipCode: user.zipCode,
+				gender: user.gender,
+				dateOfBirth: user.dateOfBirth
+			}
+		});
+	} catch (error) {
+		res.status(500).json({ success: false, message: error.message });
 	}
 };
 

@@ -6,17 +6,23 @@ const cloudinary = require('cloudinary').v2
 const products = require('./routes/product');
 const auth = require('./routes/auth');
 const order = require('./routes/order');
+const admin = require('./routes/admin');
+const cart = require('./routes/cart');
 
 
 
+app.use(cors());
 app.use(express.json({limit:'50mb'}));
 app.use(express.urlencoded({limit: "50mb", extended: true }));
-app.use(cors());
 
 app.use('/api/v1', products);
 // Mount auth routes under /api/v1/auth so frontend paths like /api/v1/auth/register match
 app.use('/api/v1/auth', auth);
 app.use('/api/v1', order);
+// Admin routes (user management)
+app.use('/api/v1/admin', admin);
+// Cart routes
+app.use('/api/v1/cart', cart);
 
 
 // Health check: verify Cloudinary credentials/connectivity

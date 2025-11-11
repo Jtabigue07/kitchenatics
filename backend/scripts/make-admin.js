@@ -40,7 +40,11 @@ async function makeAdmin(userId) {
     }
 }
 
-// The specific user ID from your request
-const userId = "690235a258c73b6745ccf180";
+// Allow passing userId as first CLI argument: node make-admin.js <userId>
+const userIdFromArg = process.argv[2]
+if (!userIdFromArg) {
+    console.error('Usage: node make-admin.js <userId>')
+    process.exit(1)
+}
 
-makeAdmin(userId);
+makeAdmin(userIdFromArg);

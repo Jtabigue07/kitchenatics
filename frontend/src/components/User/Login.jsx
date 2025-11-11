@@ -25,7 +25,7 @@ export default function Login() {
 			}
 			login(token, user)
 			if (user?.role === 'admin') navigate('/admin')
-			else navigate('/user')
+			else navigate('/products')
 		} catch (err) {
 			setError(err?.message || 'Login failed')
 		} finally {
