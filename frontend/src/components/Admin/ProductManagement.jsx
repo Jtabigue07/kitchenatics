@@ -1,11 +1,17 @@
- import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
 import { getProductsApi, createProductApi, updateProductApi, deleteProductApi } from '../../utils/api'
 import { useAuth } from '../../context/AuthContext'
-import Header from '../Layouts/Header'
-import Footer from '../Layouts/Footer'
 import MetaData from '../Layouts/MetaData'
 import Loader from '../Layouts/Loader'
+import SideBar from './SideBar'
+import { DataGrid } from '@mui/x-data-grid'
+import { 
+	Button, Dialog, DialogTitle, DialogContent, DialogActions, 
+	TextField, Select, MenuItem, FormControl, InputLabel, 
+	Chip, Avatar, Box, IconButton, Grid 
+} from '@mui/material'
+import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material'
 
 export default function ProductManagement() {
 	const { token } = useAuth()
@@ -33,14 +39,43 @@ export default function ProductManagement() {
 	const fetchProducts = async () => {
 		setLoading(true)
 		try {
+			if (!token) {
+				toast.error('Authentication required. Please login again.')
+				return
+			}
+			
 			const response = await getProductsApi({})
-			if (response.products) {
-				setProducts(response.products)
+			console.log('Products API response:', response)
+			console.log('First product raw data:', response.products?.[0])
+			
+			// Handle different response formats
+			let productList = []
+			if (response && response.success && response.products) {
+				// Backend API response format
+				productList = response.products
+			} else if (response && response.products) {
+				// Alternative response format
+				productList = response.products
 			} else if (Array.isArray(response)) {
-				setProducts(response)
+				// Direct array response
+				productList = response
+			} else if (response && Array.isArray(response.data)) {
+				// Another possible format
+				productList = response.data
+			} else {
+				console.warn('Unexpected response format:', response)
+				productList = []
+			}
+			
+			setProducts(productList)
+			if (productList.length === 0) {
+				console.log('No products found')
 			}
 		} catch (error) {
-			toast.error(error?.message || 'Failed to load products')
+			console.error('Error fetching products:', error)
+			const errorMessage = error?.data?.message || error?.message || 'Failed to load products'
+			toast.error(errorMessage)
+			setProducts([])
 		} finally {
 			setLoading(false)
 		}
@@ -78,7 +113,6 @@ export default function ProductManagement() {
 
 		try {
 			if (editingProduct) {
-				// Update product
 				await updateProductApi({
 					token,
 					id: editingProduct._id || editingProduct.id,
@@ -87,8 +121,6 @@ export default function ProductManagement() {
 				})
 				toast.success('Product updated successfully')
 			} else {
-				// Create product
-				console.log('Creating product with:', { formData, imagesCount: images.length, hasToken: !!token })
 				await createProductApi({
 					token,
 					productData: formData,
@@ -164,13 +196,107 @@ export default function ProductManagement() {
 		resetForm()
 	}
 
+	// Transform products for DataGrid
+	const rows = products.map((product, index) => ({
+		id: product._id || product.id || `temp-${index}`,
+		name: product.name || 'Unnamed Product',
+		category: product.category || 'Uncategorized',
+		brand: product.brand || 'Unknown Brand',
+		type: product.type || 'Unknown Type',
+		price: typeof product.price === 'number' ? product.price : parseFloat(product.price) || 0,
+		originalPrice: typeof product.originalPrice === 'number' ? product.originalPrice : parseFloat(product.originalPrice) || 0,
+		stock: typeof product.stock === 'number' ? product.stock : parseInt(product.stock) || 0,
+		description: product.description || '',
+		imageUrl: product.images && product.images[0]?.url ? product.images[0].url : null,
+		images: product.images || []
+	}))
+
+	const columns = [
+		{
+			field: 'imageUrl',
+			headerName: 'Image',
+			width: 80,
+			sortable: false,
+			renderCell: (params) => (
+				<Avatar
+					src={params.value || 'https://via.placeholder.com/50'}
+					alt={params.row.name}
+					variant="rounded"
+					sx={{ width: 50, height: 50 }}
+				/>
+			)
+		},
+		{
+			field: 'name',
+			headerName: 'Product Name',
+			flex: 1,
+			minWidth: 200
+		},
+		{
+			field: 'category',
+			headerName: 'Category',
+			width: 130,
+			renderCell: (params) => (
+				<Chip label={params.value} color="primary" size="small" />
+			)
+		},
+		{
+			field: 'brand',
+			headerName: 'Brand',
+			width: 130
+		},
+		{
+			field: 'price',
+			headerName: 'Price',
+			width: 100,
+			renderCell: (params) => {
+				const price = typeof params.value === 'number' ? params.value : parseFloat(params.value) || 0
+				return `₱${price.toFixed(2)}`
+			}
+		},
+		{
+			field: 'stock',
+			headerName: 'Stock',
+			width: 90,
+			renderCell: (params) => (
+				<Chip
+					label={params.value}
+					color={params.value > 10 ? 'success' : params.value > 0 ? 'warning' : 'error'}
+					size="small"
+				/>
+			)
+		},
+		{
+			field: 'actions',
+			headerName: 'Actions',
+			width: 120,
+			sortable: false,
+			renderCell: (params) => (
+				<Box sx={{ display: 'flex', gap: 1 }}>
+					<IconButton
+						size="small"
+						color="primary"
+						onClick={() => handleEdit(products.find(p => (p._id || p.id) === params.row.id))}
+					>
+						<EditIcon fontSize="small" />
+					</IconButton>
+					<IconButton
+						size="small"
+						color="error"
+						onClick={() => handleDelete(params.row.id)}
+					>
+						<DeleteIcon fontSize="small" />
+					</IconButton>
+				</Box>
+			)
+		}
+	]
+
 	if (loading) {
 		return (
 			<>
 				<MetaData title="Product Management" />
-				<Header />
 				<Loader />
-				<Footer />
 			</>
 		)
 	}
@@ -178,238 +304,224 @@ export default function ProductManagement() {
 	return (
 		<>
 			<MetaData title="Product Management" />
-			<Header />
-			<div className="container-fluid" style={{ minHeight: '80vh', paddingTop: '2rem', paddingBottom: '2rem' }}>
-				<div className="row">
-					<div className="col-12">
+
+			<div className="d-flex">
+				{/* Sidebar */}
+				<div className="col-md-3 col-lg-2 p-0">
+					<SideBar />
+				</div>
+
+				{/* Main Content */}
+				<div className="col-md-9 col-lg-10 p-0">
+					<div className="container-fluid" style={{ minHeight: '100vh', paddingTop: '2rem', paddingBottom: '2rem', backgroundColor: '#f8f9fa' }}>
 						<div className="d-flex justify-content-between align-items-center mb-4">
 							<h2>Product Management</h2>
-							<button className="btn btn-primary" onClick={openModal}>
-								<i className="fa fa-plus mr-2"></i>Add New Product
-							</button>
+							<Button
+								variant="contained"
+								color="primary"
+								startIcon={<AddIcon />}
+								onClick={openModal}
+							>
+								Add New Product
+							</Button>
 						</div>
 
-						{/* Products Table */}
-						<div className="card">
-							<div className="card-body">
-								<div className="table-responsive">
-									<table className="table table-hover">
-										<thead>
-											<tr>
-												<th>Image</th>
-												<th>Name</th>
-												<th>Category</th>
-												<th>Brand</th>
-												<th>Price</th>
-												<th>Stock</th>
-												<th>Actions</th>
-											</tr>
-										</thead>
-										<tbody>
-											{products.length === 0 ? (
-												<tr>
-													<td colSpan="7" className="text-center py-4">
-														<p className="text-muted">No products found. Create your first product!</p>
-													</td>
-												</tr>
-											) : (
-												products.map(product => (
-													<tr key={product._id || product.id}>
-														<td>
-															<img
-																src={product.images && product.images[0]?.url ? product.images[0].url : 'https://via.placeholder.com/50'}
-																alt={product.name}
-																style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '5px' }}
-															/>
-														</td>
-														<td>{product.name}</td>
-														<td>{product.category}</td>
-														<td>{product.brand}</td>
-														<td>₱{typeof product.price === 'number' ? product.price.toFixed(2) : product.price}</td>
-														<td>{product.stock}</td>
-														<td>
-															<button
-																className="btn btn-sm btn-info mr-2"
-																onClick={() => handleEdit(product)}
-															>
-																<i className="fa fa-edit"></i> Edit
-															</button>
-															<button
-																className="btn btn-sm btn-danger"
-																onClick={() => handleDelete(product._id || product.id)}
-															>
-																<i className="fa fa-trash"></i> Delete
-															</button>
-														</td>
-													</tr>
-												))
-											)}
-										</tbody>
-									</table>
-								</div>
-							</div>
-						</div>
+						{/* Products DataGrid */}
+						<Box sx={{ height: 600, width: '100%', backgroundColor: 'white', borderRadius: 2 }}>
+							<DataGrid
+								rows={rows}
+								columns={columns}
+								initialState={{
+									pagination: {
+										paginationModel: { page: 0, pageSize: 10 }
+									}
+								}}
+								pageSizeOptions={[5, 10, 25, 50]}
+								disableRowSelectionOnClick
+								loading={loading}
+								getRowId={(row) => row.id}
+								localeText={{
+									noRowsLabel: 'No products found. Create your first product!'
+								}}
+								sx={{
+									'& .MuiDataGrid-cell:focus': {
+										outline: 'none'
+									},
+									'& .MuiDataGrid-row:hover': {
+										backgroundColor: 'rgba(0, 0, 0, 0.04)'
+									},
+									'& .MuiDataGrid-overlay': {
+										backgroundColor: 'transparent'
+									}
+								}}
+							/>
+						</Box>
 					</div>
 				</div>
 			</div>
 
-			{/* Product Modal */}
-			{showModal && (
-				<div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
-					<div className="modal-dialog modal-lg">
-						<div className="modal-content">
-							<div className="modal-header">
-								<h5 className="modal-title">
-									{editingProduct ? 'Edit Product' : 'Add New Product'}
-								</h5>
-								<button type="button" className="close" onClick={closeModal}>
-									<span>&times;</span>
-								</button>
-							</div>
-							<form onSubmit={handleSubmit}>
-								<div className="modal-body">
-									<div className="row">
-										<div className="col-md-6 mb-3">
-											<label>Product Name *</label>
-											<input
-												type="text"
-												className="form-control"
-												name="name"
-												value={formData.name}
-												onChange={handleInputChange}
-												required
+			{/* Product Modal with MUI Dialog */}
+			<Dialog
+				open={showModal}
+				onClose={closeModal}
+				maxWidth="md"
+				fullWidth
+			>
+				<DialogTitle>
+					{editingProduct ? 'Edit Product' : 'Add New Product'}
+				</DialogTitle>
+				<form onSubmit={handleSubmit}>
+					<DialogContent>
+						<Grid container spacing={2}>
+							<Grid item xs={12} md={6}>
+								<TextField
+									fullWidth
+									label="Product Name"
+									name="name"
+									value={formData.name}
+									onChange={handleInputChange}
+									required
+									margin="dense"
+								/>
+							</Grid>
+							<Grid item xs={12} md={6}>
+								<FormControl fullWidth margin="dense" required>
+									<InputLabel>Category</InputLabel>
+									<Select
+										name="category"
+										value={formData.category}
+										onChange={handleInputChange}
+										label="Category"
+									>
+										<MenuItem value="Cookware">Cookware</MenuItem>
+										<MenuItem value="Cutlery">Cutlery</MenuItem>
+										<MenuItem value="Baking Tools">Baking Tools</MenuItem>
+										<MenuItem value="Storage">Storage</MenuItem>
+										<MenuItem value="Appliances">Appliances</MenuItem>
+										<MenuItem value="Accessories">Accessories</MenuItem>
+									</Select>
+								</FormControl>
+							</Grid>
+							<Grid item xs={12} md={6}>
+								<TextField
+									fullWidth
+									label="Brand"
+									name="brand"
+									value={formData.brand}
+									onChange={handleInputChange}
+									required
+									margin="dense"
+								/>
+							</Grid>
+							<Grid item xs={12} md={6}>
+								<FormControl fullWidth margin="dense" required>
+									<InputLabel>Type</InputLabel>
+									<Select
+										name="type"
+										value={formData.type}
+										onChange={handleInputChange}
+										label="Type"
+									>
+										<MenuItem value="Stainless Steel">Stainless Steel</MenuItem>
+										<MenuItem value="Cast Iron">Cast Iron</MenuItem>
+										<MenuItem value="Non-Stick">Non-Stick</MenuItem>
+										<MenuItem value="Ceramic">Ceramic</MenuItem>
+										<MenuItem value="Glass">Glass</MenuItem>
+										<MenuItem value="Silicone">Silicone</MenuItem>
+									</Select>
+								</FormControl>
+							</Grid>
+							<Grid item xs={12} md={6}>
+								<TextField
+									fullWidth
+									label="Price"
+									name="price"
+									type="number"
+									inputProps={{ step: '0.01' }}
+									value={formData.price}
+									onChange={handleInputChange}
+									required
+									margin="dense"
+								/>
+							</Grid>
+							<Grid item xs={12} md={6}>
+								<TextField
+									fullWidth
+									label="Original Price (Optional)"
+									name="originalPrice"
+									type="number"
+									inputProps={{ step: '0.01' }}
+									value={formData.originalPrice}
+									onChange={handleInputChange}
+									margin="dense"
+								/>
+							</Grid>
+							<Grid item xs={12} md={6}>
+								<TextField
+									fullWidth
+									label="Stock"
+									name="stock"
+									type="number"
+									value={formData.stock}
+									onChange={handleInputChange}
+									required
+									margin="dense"
+								/>
+							</Grid>
+							<Grid item xs={12}>
+								<TextField
+									fullWidth
+									label="Description"
+									name="description"
+									multiline
+									rows={4}
+									value={formData.description}
+									onChange={handleInputChange}
+									required
+									margin="dense"
+								/>
+							</Grid>
+							<Grid item xs={12}>
+								<Button
+									variant="outlined"
+									component="label"
+									fullWidth
+								>
+									Upload Images
+									<input
+										type="file"
+										hidden
+										multiple
+										accept="image/*"
+										onChange={handleImageChange}
+									/>
+								</Button>
+								{previewImages.length > 0 && (
+									<Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
+										{previewImages.map((preview, index) => (
+											<Avatar
+												key={index}
+												src={preview}
+												alt={`Preview ${index + 1}`}
+												variant="rounded"
+												sx={{ width: 100, height: 100 }}
 											/>
-										</div>
-										<div className="col-md-6 mb-3">
-											<label>Category *</label>
-											<select
-												className="form-control"
-												name="category"
-												value={formData.category}
-												onChange={handleInputChange}
-												required
-											>
-												<option value="" disabled>Select Category</option>
-												<option value="Cookware">Cookware</option>
-												<option value="Cutlery">Cutlery</option>
-												<option value="Baking Tools">Baking Tools</option>
-												<option value="Storage">Storage</option>
-												<option value="Appliances">Appliances</option>
-												<option value="Accessories">Accessories</option>
-											</select>
-										</div>
-										<div className="col-md-6 mb-3">
-											<label>Brand *</label>
-											<input
-												type="text"
-												className="form-control"
-												name="brand"
-												value={formData.brand}
-												onChange={handleInputChange}
-												required
-											/>
-										</div>
-										<div className="col-md-6 mb-3">
-											<label>Type *</label>
-											<select
-												className="form-control"
-												name="type"
-												value={formData.type}
-												onChange={handleInputChange}
-												required
-											>
-												<option value="" disabled>Select Type</option>
-												<option value="Stainless Steel">Stainless Steel</option>
-												<option value="Cast Iron">Cast Iron</option>
-												<option value="Non-Stick">Non-Stick</option>
-												<option value="Ceramic">Ceramic</option>
-												<option value="Glass">Glass</option>
-												<option value="Silicone">Silicone</option>
-											</select>
-										</div>
-										<div className="col-md-6 mb-3">
-											<label>Price *</label>
-											<input
-												type="number"
-												step="0.01"
-												className="form-control"
-												name="price"
-												value={formData.price}
-												onChange={handleInputChange}
-												required
-											/>
-										</div>
-										<div className="col-md-6 mb-3">
-											<label>Original Price (Optional)</label>
-											<input
-												type="number"
-												step="0.01"
-												className="form-control"
-												name="originalPrice"
-												value={formData.originalPrice}
-												onChange={handleInputChange}
-											/>
-										</div>
-										<div className="col-md-6 mb-3">
-											<label>Stock *</label>
-											<input
-												type="number"
-												className="form-control"
-												name="stock"
-												value={formData.stock}
-												onChange={handleInputChange}
-												required
-											/>
-										</div>
-										<div className="col-12 mb-3">
-											<label>Description *</label>
-											<textarea
-												className="form-control"
-												rows="4"
-												name="description"
-												value={formData.description}
-												onChange={handleInputChange}
-												required
-											></textarea>
-										</div>
-										<div className="col-12 mb-3">
-											<label>Product Images</label>
-											<input
-												type="file"
-												className="form-control"
-												multiple
-												accept="image/*"
-												onChange={handleImageChange}
-											/>
-											{previewImages.length > 0 && (
-												<div className="mt-3 d-flex flex-wrap gap-2">
-													{previewImages.map((preview, index) => (
-														<img
-															key={index}
-															src={preview}
-															alt={`Preview ${index + 1}`}
-															style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '5px' }}
-														/>
-													))}
-												</div>
-											)}
-										</div>
-									</div>
-								</div>
-								<div className="modal-footer">
-									<button type="button" className="btn btn-secondary" onClick={closeModal}>
-										Cancel
-									</button>
-									<button type="submit" className="btn btn-primary">
-										{editingProduct ? 'Update Product' : 'Create Product'}
-									</button>
-								</div>
-							</form>
-						</div>
-					</div>
-				</div>
-			)}
-			<Footer />
+										))}
+									</Box>
+								)}
+							</Grid>
+						</Grid>
+					</DialogContent>
+					<DialogActions>
+						<Button onClick={closeModal} color="inherit">
+							Cancel
+						</Button>
+						<Button type="submit" variant="contained" color="primary">
+							{editingProduct ? 'Update Product' : 'Create Product'}
+						</Button>
+					</DialogActions>
+				</form>
+			</Dialog>
 		</>
 	)
 }

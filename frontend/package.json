@@ -12,7 +12,9 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^6.1.9",
     "@mui/material": "^7.3.2",
+    "@mui/styled-engine": "^6.5.0",
     "@mui/x-data-grid": "^8.14.1",
     "axios": "^1.11.0",
     "countries-list": "^3.2.0",

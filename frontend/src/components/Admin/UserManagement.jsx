@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import Header from '../Layouts/Header'
-import Footer from '../Layouts/Footer'
 import MetaData from '../Layouts/MetaData'
 import { DataGrid } from '@mui/x-data-grid'
 import { Button, Avatar } from '@mui/material'
 import { useAuth } from '../../context/AuthContext'
 import { getAllUsersApi, updateUserApi } from '../../utils/api'
+import SideBar from './SideBar'
+import { addDeactivatedUser, removeDeactivatedUser, DEACTIVATED_USERS } from '../../config/deactivatedUsers'
 
 export default function UserManagement() {
     const [users, setUsers] = useState([])
@@ -40,6 +40,20 @@ export default function UserManagement() {
             }
             const data = await getAllUsersApi({ token })
             const fetched = data.users || []
+            
+            // Sync deactivated users list with database
+            console.log('🔄 Syncing deactivated users list with database...')
+            DEACTIVATED_USERS.length = 0 // Clear current list
+            
+            fetched.forEach(user => {
+                if (user.isActive === false) {
+                    console.log('🔒 Found deactivated user in DB:', user._id, user.name)
+                    addDeactivatedUser(user._id)
+                }
+            })
+            
+            console.log('📋 Current deactivated users list:', DEACTIVATED_USERS)
+            
             // Normalize to rows for DataGrid
             setUsers(fetched.map(u => ({
                 id: u._id,
@@ -68,7 +82,9 @@ export default function UserManagement() {
             await fetchUsers()
         } catch (error) {
             console.error('Error updating user role:', error)
-            alert(error.message || 'Failed to update role')
+            console.error('Full error details:', error)
+            const errorMessage = error?.data?.message || error?.message || 'Failed to update user role'
+            alert(`Error: ${errorMessage}`)
         } finally {
             setUpdatingIds(prev => {
                 const s = new Set(prev)
@@ -79,19 +95,49 @@ export default function UserManagement() {
     }
 
     const toggleUserStatus = async (userId) => {
+        const user = users.find(u => u.id === userId)
+        if (!user) {
+            alert('User not found')
+            return
+        }
+
+        const newStatus = !user.isActive
+        console.log(`Toggling user ${userId} from ${user.isActive} to ${newStatus}`)
+
+        // Optimistic update: update UI immediately
+        setUsers(prevUsers =>
+            prevUsers.map(u =>
+                u.id === userId ? { ...u, isActive: newStatus } : u
+            )
+        )
+
+        setUpdatingIds(prev => new Set(prev).add(userId))
+
         try {
             const token = auth?.token
             if (!token) throw new Error('Not authenticated')
-            const user = users.find(u => u.id === userId)
-            if (!user) throw new Error('User not found')
-            const newStatus = !user.isActive
-            setUpdatingIds(prev => new Set(prev).add(userId))
-            await updateUserApi({ token, id: userId, isActive: newStatus })
-            // Refresh list from server to keep UI consistent
-            await fetchUsers()
+            const response = await updateUserApi({ token, id: userId, isActive: newStatus })
+            console.log('Toggle status response:', response)
+            // Update the deactivated users list for frontend blocking
+            if (newStatus === false) {
+                console.log('🔒 Adding user to deactivated list:', userId)
+                addDeactivatedUser(userId)
+            } else {
+                console.log('🔓 Removing user from deactivated list:', userId)
+                removeDeactivatedUser(userId)
+            }
+            // No need to refresh since we updated optimistically
         } catch (error) {
             console.error('Error toggling user status:', error)
-            alert(error.message || 'Failed to toggle status')
+            // Revert optimistic update on error
+            setUsers(prevUsers =>
+                prevUsers.map(u =>
+                    u.id === userId ? { ...u, isActive: user.isActive } : u
+                )
+            )
+            console.error('Full error details:', error)
+            const errorMessage = error?.data?.message || error?.message || 'Failed to toggle user status'
+            alert(`Error: ${errorMessage}`)
         } finally {
             setUpdatingIds(prev => {
                 const s = new Set(prev)
@@ -137,10 +183,16 @@ export default function UserManagement() {
     return (
         <>
             <MetaData title="User Management" />
-            <Header />
-            <div className="container-fluid" style={{ minHeight: '80vh', paddingTop: '2rem', paddingBottom: '2rem' }}>
-                <div className="row">
-                    <div className="col-12">
+
+            <div className="d-flex">
+                {/* Sidebar */}
+                <div className="col-md-3 col-lg-2 p-0">
+                    <SideBar />
+                </div>
+
+                {/* Main Content */}
+                <div className="col-md-9 col-lg-10 p-0">
+                    <div className="container-fluid" style={{ minHeight: '100vh', paddingTop: '2rem', paddingBottom: '2rem', backgroundColor: '#f8f9fa' }}>
                         <div className="d-flex justify-content-between align-items-center mb-4">
                             <h2>User Management</h2>
                             <Link to="/admin" className="btn btn-outline-secondary">
@@ -181,7 +233,19 @@ export default function UserManagement() {
                                         },
                                         { field: 'email', headerName: 'Email', flex: 1.2 },
                                         { field: 'role', headerName: 'Role', width: 120 },
-                                        { field: 'isActive', headerName: 'Active', width: 100, valueFormatter: (p) => (p.value ? 'Yes' : 'No') },
+                                        { 
+                                            field: 'isActive', 
+                                            headerName: 'Status', 
+                                            width: 100, 
+                                            renderCell: (params) => (
+                                                <span style={{ 
+                                                    color: params.value ? '#2e7d32' : '#d32f2f',
+                                                    fontWeight: 'bold'
+                                                }}>
+                                                    {params.value ? '✓ Active' : '✗ Inactive'}
+                                                </span>
+                                            )
+                                        },
                                         { 
                                             field: 'createdAt', 
                                             headerName: 'Joined', 
@@ -217,7 +281,14 @@ export default function UserManagement() {
                                                                 {updatingIds.has(row.id) ? 'Updating…' : 'Make User'}
                                                             </Button>
                                                         )}
-                                                        <Button size="small" color="error" variant="contained" onClick={() => toggleUserStatus(row.id)} disabled={updatingIds.has(row.id)}>
+                                                        <Button 
+                                                            size="small" 
+                                                            color={row.isActive ? 'error' : 'success'}
+                                                            variant="contained" 
+                                                            onClick={() => toggleUserStatus(row.id)} 
+                                                            disabled={updatingIds.has(row.id)}
+                                                            sx={{ minWidth: '90px' }}
+                                                        >
                                                             {updatingIds.has(row.id) ? 'Updating…' : (row.isActive ? 'Deactivate' : 'Activate')}
                                                         </Button>
                                                     </div>
@@ -268,7 +339,6 @@ export default function UserManagement() {
                     </div>
                 </div>
             </div>
-            <Footer />
         </>
     )
 }

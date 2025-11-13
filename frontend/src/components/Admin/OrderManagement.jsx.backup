@@ -1,0 +1,307 @@
+import React, { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
+import MetaData from '../Layouts/MetaData'
+import Loader from '../Layouts/Loader'
+import SideBar from './SideBar'
+import { toast } from 'react-toastify'
+import { getAllOrdersApi, updateOrderStatusApi } from '../../utils/api'
+
+export default function OrderManagement() {
+    const { token } = useAuth()
+    const [orders, setOrders] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [updatingOrder, setUpdatingOrder] = useState(null)
+    const [filters, setFilters] = useState({
+        status: 'all',
+        search: '',
+        page: 1,
+        limit: 10
+    })
+    const [pagination, setPagination] = useState({
+        currentPage: 1,
+        totalPages: 1,
+        totalOrders: 0,
+        hasNext: false,
+        hasPrev: false
+    })
+
+    useEffect(() => {
+        fetchOrders()
+    }, [filters])
+
+    const fetchOrders = async () => {
+        try {
+            setLoading(true)
+            const response = await getAllOrdersApi({
+                token,
+                page: filters.page,
+                limit: filters.limit,
+                status: filters.status,
+                search: filters.search
+            })
+
+            if (response.success) {
+                setOrders(response.orders)
+                setPagination(response.pagination)
+            }
+        } catch (error) {
+            console.error('Error fetching orders:', error)
+            toast.error('Failed to load orders')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleStatusUpdate = async (orderId, newStatus) => {
+        try {
+            setUpdatingOrder(orderId)
+            const response = await updateOrderStatusApi({
+                token,
+                orderId,
+                status: newStatus
+            })
+
+            if (response.success) {
+                toast.success('Order status updated successfully')
+                // Update local state
+                setOrders(orders.map(order =>
+                    order._id === orderId ? { ...order, status: newStatus } : order
+                ))
+            }
+        } catch (error) {
+            console.error('Error updating order status:', error)
+            toast.error(error.message || 'Failed to update order status')
+        } finally {
+            setUpdatingOrder(null)
+        }
+    }
+
+    const handleFilterChange = (key, value) => {
+        setFilters(prev => ({
+            ...prev,
+            [key]: value,
+            page: key === 'page' ? value : 1 // Reset to page 1 when changing filters
+        }))
+    }
+
+    const getStatusBadge = (status) => {
+        const statusColors = {
+            pending: 'warning',
+            processing: 'info',
+            shipped: 'primary',
+            delivered: 'success',
+            cancelled: 'danger'
+        }
+        return `badge bg-${statusColors[status] || 'secondary'}`
+    }
+
+    const formatDate = (dateString) => {
+        return new Date(dateString).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        })
+    }
+
+    const getStatusOptions = (currentStatus) => {
+        const allStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled']
+        return allStatuses.filter(status => status !== currentStatus)
+    }
+
+    return (
+        <>
+            <MetaData title="Order Management" />
+
+            <div className="d-flex">
+                {/* Sidebar */}
+                <div className="col-md-3 col-lg-2 p-0">
+                    <SideBar />
+                </div>
+
+                {/* Main Content */}
+                <div className="col-md-9 col-lg-10 p-0">
+                    <div className="container-fluid" style={{ minHeight: '100vh', paddingTop: '2rem', paddingBottom: '2rem', backgroundColor: '#f8f9fa' }}>
+                        <div className="d-flex justify-content-between align-items-center mb-4">
+                            <h2>Order Management</h2>
+                            <Link to="/admin" className="btn btn-outline-secondary">
+                                <i className="fa fa-arrow-left mr-2"></i>Back to Dashboard
+                            </Link>
+                        </div>
+
+                        {/* Filters */}
+                        <div className="card mb-4">
+                            <div className="card-body">
+                                <div className="row">
+                                    <div className="col-md-4">
+                                        <div className="form-group">
+                                            <label>Status Filter:</label>
+                                            <select
+                                                className="form-control"
+                                                value={filters.status}
+                                                onChange={(e) => handleFilterChange('status', e.target.value)}
+                                            >
+                                                <option value="all">All Orders</option>
+                                                <option value="pending">Pending</option>
+                                                <option value="processing">Processing</option>
+                                                <option value="shipped">Shipped</option>
+                                                <option value="delivered">Delivered</option>
+                                                <option value="cancelled">Cancelled</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="col-md-6">
+                                        <div className="form-group">
+                                            <label>Search:</label>
+                                            <input
+                                                type="text"
+                                                className="form-control"
+                                                placeholder="Search by order number, customer name, or email..."
+                                                value={filters.search}
+                                                onChange={(e) => handleFilterChange('search', e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="col-md-2">
+                                        <div className="form-group">
+                                            <label>Per Page:</label>
+                                            <select
+                                                className="form-control"
+                                                value={filters.limit}
+                                                onChange={(e) => handleFilterChange('limit', parseInt(e.target.value))}
+                                            >
+                                                <option value={10}>10</option>
+                                                <option value={25}>25</option>
+                                                <option value={50}>50</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {loading ? (
+                            <Loader />
+                        ) : (
+                            <>
+                                <div className="table-responsive">
+                                    <table className="table table-striped table-hover">
+                                        <thead className="table-dark">
+                                            <tr>
+                                                <th>Order ID</th>
+                                                <th>Customer</th>
+                                                <th>Email</th>
+                                                <th>Items</th>
+                                                <th>Total</th>
+                                                <th>Status</th>
+                                                <th>Date</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {orders.map((order) => (
+                                                <tr key={order._id}>
+                                                    <td><strong>{order.orderNumber}</strong></td>
+                                                    <td>{order.customerDetails?.name}</td>
+                                                    <td>{order.customerDetails?.email}</td>
+                                                    <td>{order.orderLines?.length || 0}</td>
+                                                    <td>₱{order.totalAmount?.toFixed(2)}</td>
+                                                    <td>
+                                                        <span className={getStatusBadge(order.status)}>
+                                                            {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                                                        </span>
+                                                    </td>
+                                                    <td>{formatDate(order.createdAt)}</td>
+                                                    <td>
+                                                        <div className="dropdown">
+                                                            <button
+                                                                className="btn btn-sm btn-outline-primary dropdown-toggle"
+                                                                type="button"
+                                                                data-bs-toggle="dropdown"
+                                                                disabled={updatingOrder === order._id}
+                                                            >
+                                                                {updatingOrder === order._id ? (
+                                                                    <i className="fa fa-spinner fa-spin"></i>
+                                                                ) : (
+                                                                    'Actions'
+                                                                )}
+                                                            </button>
+                                                            <ul className="dropdown-menu">
+                                                                {getStatusOptions(order.status).map(status => (
+                                                                    <li key={status}>
+                                                                        <button
+                                                                            className="dropdown-item"
+                                                                            onClick={() => handleStatusUpdate(order._id, status)}
+                                                                        >
+                                                                            Mark as {status.charAt(0).toUpperCase() + status.slice(1)}
+                                                                        </button>
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {orders.length === 0 && (
+                                    <div className="text-center py-5">
+                                        <i className="fa fa-shopping-bag fa-3x text-muted mb-3"></i>
+                                        <h5 className="text-muted">No orders found</h5>
+                                        <p className="text-muted">Orders will appear here when customers place them.</p>
+                                    </div>
+                                )}
+
+                                {/* Pagination */}
+                                {pagination.totalPages > 1 && (
+                                    <div className="d-flex justify-content-center mt-4">
+                                        <nav>
+                                            <ul className="pagination">
+                                                {pagination.hasPrev && (
+                                                    <li className="page-item">
+                                                        <button
+                                                            className="page-link"
+                                                            onClick={() => handleFilterChange('page', pagination.currentPage - 1)}
+                                                        >
+                                                            Previous
+                                                        </button>
+                                                    </li>
+                                                )}
+
+                                                {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map(page => (
+                                                    <li key={page} className={`page-item ${page === pagination.currentPage ? 'active' : ''}`}>
+                                                        <button
+                                                            className="page-link"
+                                                            onClick={() => handleFilterChange('page', page)}
+                                                        >
+                                                            {page}
+                                                        </button>
+                                                    </li>
+                                                ))}
+
+                                                {pagination.hasNext && (
+                                                    <li className="page-item">
+                                                        <button
+                                                            className="page-link"
+                                                            onClick={() => handleFilterChange('page', pagination.currentPage + 1)}
+                                                        >
+                                                            Next
+                                                        </button>
+                                                    </li>
+                                                )}
+                                            </ul>
+                                        </nav>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </>
+    )
+}

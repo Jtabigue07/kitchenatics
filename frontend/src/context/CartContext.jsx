@@ -122,6 +122,7 @@ export function CartProvider({ children }) {
 		removeFromCart,
 		clearCart,
 		loadCart,
+		refreshCart: loadCart,
 		getCartItemCount
 	}), [cart, loading, addToCart, updateCartItem, removeFromCart, clearCart, loadCart, getCartItemCount])
 

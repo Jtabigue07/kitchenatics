@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useCart } from '../../context/CartContext'
+import { useAuth } from '../../context/AuthContext'
 import Header from '../Layouts/Header'
 import Footer from '../Layouts/Footer'
 import MetaData from '../Layouts/MetaData'
 import Loader from '../Layouts/Loader'
 import { toast } from 'react-toastify'
+import { createOrderApi } from '../../utils/api'
 
 export default function Cart() {
-	const { cart, loading, updateCartItem, removeFromCart, clearCart, getCartItemCount } = useCart()
+	const { cart, loading, updateCartItem, removeFromCart, clearCart, getCartItemCount, refreshCart } = useCart()
+	const { token } = useAuth()
+	const navigate = useNavigate()
 	const [updatingItems, setUpdatingItems] = useState(new Set())
+	const [checkoutLoading, setCheckoutLoading] = useState(false)
 
 	const handleQuantityChange = async (itemId, newQuantity) => {
 		if (newQuantity < 1) return
@@ -47,6 +52,33 @@ export default function Cart() {
 			} catch (error) {
 				toast.error(error.message || 'Failed to clear cart')
 			}
+		}
+	}
+
+	const handleCheckout = async () => {
+		if (!cart?.items || cart.items.length === 0) {
+			toast.error('Your cart is empty')
+			return
+		}
+
+		setCheckoutLoading(true)
+		try {
+			const response = await createOrderApi({
+				token,
+				paymentMethod: 'cash_on_delivery',
+				notes: ''
+			})
+
+			toast.success('Order created successfully!')
+			// Refresh cart to show it's empty
+			await refreshCart()
+			// Navigate to order confirmation or orders page
+			navigate('/user/orders', { replace: true })
+		} catch (error) {
+			console.error('Checkout error:', error)
+			toast.error(error.message || 'Failed to create order')
+		} finally {
+			setCheckoutLoading(false)
 		}
 	}
 
@@ -202,8 +234,20 @@ export default function Cart() {
 													<strong>Total:</strong>
 													<strong>₱{calculateTotal().toFixed(2)}</strong>
 												</div>
-												<button className="btn btn-success btn-block">
-													<i className="fa fa-credit-card mr-2"></i>Proceed to Checkout
+												<button
+													className="btn btn-success btn-block"
+													onClick={handleCheckout}
+													disabled={checkoutLoading || cart?.items?.length === 0}
+												>
+													{checkoutLoading ? (
+														<>
+															<i className="fa fa-spinner fa-spin mr-2"></i>Processing...
+														</>
+													) : (
+														<>
+															<i className="fa fa-credit-card mr-2"></i>Proceed to Checkout
+														</>
+													)}
 												</button>
 											</div>
 										</div>

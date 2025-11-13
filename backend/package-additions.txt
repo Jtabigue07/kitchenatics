@@ -1,0 +1,7 @@
+# Add these packages to your backend package.json dependencies:
+
+"puppeteer": "^21.5.2",
+"html-pdf-node": "^1.0.8"
+
+# Run this command in your backend directory:
+npm install puppeteer html-pdf-node

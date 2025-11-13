@@ -1,200 +1,389 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import Header from '../Layouts/Header'
-import Footer from '../Layouts/Footer'
+import { useAuth } from '../../context/AuthContext'
 import MetaData from '../Layouts/MetaData'
+import Loader from '../Layouts/Loader'
+import SideBar from './SideBar'
+import { toast } from 'react-toastify'
+import { getAllOrdersApi, updateOrderStatusApi } from '../../utils/api'
+import { DataGrid } from '@mui/x-data-grid'
+import { 
+	Button, Chip, Box, TextField, Select, MenuItem, 
+	FormControl, InputLabel, IconButton, Menu 
+} from '@mui/material'
+import { MoreVert as MoreIcon, ArrowBack } from '@mui/icons-material'
 
 export default function OrderManagement() {
-    const [orders, setOrders] = useState([])
-    const [loading, setLoading] = useState(true)
+	const { token } = useAuth()
+	const [orders, setOrders] = useState([])
+	const [loading, setLoading] = useState(true)
+	const [updatingOrder, setUpdatingOrder] = useState(null)
+	const [filters, setFilters] = useState({
+		status: 'all',
+		search: '',
+		page: 1,
+		limit: 10
+	})
+	const [pagination, setPagination] = useState({
+		currentPage: 1,
+		totalPages: 1,
+		totalOrders: 0,
+		hasNext: false,
+		hasPrev: false
+	})
+	const [anchorEl, setAnchorEl] = useState(null)
+	const [selectedOrderId, setSelectedOrderId] = useState(null)
 
-    useEffect(() => {
-        // Fetch orders from API
-        fetchOrders()
-    }, [])
+	useEffect(() => {
+		fetchOrders()
+	}, [filters])
 
-    const fetchOrders = async () => {
-        try {
-            // Simulated orders data - replace with actual API call
-            const mockOrders = [
-                {
-                    _id: '1',
-                    orderId: 'ORD-001',
-                    customer: 'John Doe',
-                    email: 'john@example.com',
-                    total: 150.00,
-                    status: 'pending',
-                    createdAt: '2024-01-15T10:30:00Z',
-                    items: 3
-                },
-                {
-                    _id: '2',
-                    orderId: 'ORD-002',
-                    customer: 'Jane Smith',
-                    email: 'jane@example.com',
-                    total: 89.50,
-                    status: 'processing',
-                    createdAt: '2024-01-15T14:20:00Z',
-                    items: 2
-                },
-                {
-                    _id: '3',
-                    orderId: 'ORD-003',
-                    customer: 'Bob Johnson',
-                    email: 'bob@example.com',
-                    total: 245.75,
-                    status: 'completed',
-                    createdAt: '2024-01-14T09:15:00Z',
-                    items: 5
-                }
-            ]
-            
-            setOrders(mockOrders)
-            setLoading(false)
-        } catch (error) {
-            console.error('Error fetching orders:', error)
-            setLoading(false)
-        }
-    }
+	const fetchOrders = async () => {
+		try {
+			setLoading(true)
+			
+			if (!token) {
+				toast.error('Authentication required. Please login again.')
+				return
+			}
+			
+			const response = await getAllOrdersApi({
+				token,
+				page: filters.page,
+				limit: filters.limit,
+				status: filters.status,
+				search: filters.search
+			})
+			
+			console.log('Orders API response:', response)
+			console.log('First order raw data:', response.orders?.[0])
 
-    const updateOrderStatus = async (orderId, newStatus) => {
-        try {
-            // Update order status - replace with actual API call
-            setOrders(orders.map(order => 
-                order._id === orderId ? { ...order, status: newStatus } : order
-            ))
-        } catch (error) {
-            console.error('Error updating order status:', error)
-        }
-    }
+			// Handle different response formats
+			let orderList = []
+			let paginationData = {
+				currentPage: 1,
+				totalPages: 1,
+				totalOrders: 0,
+				hasNext: false,
+				hasPrev: false
+			}
+			
+			if (response && response.success) {
+				orderList = response.orders || []
+				paginationData = response.pagination || paginationData
+			} else if (response && response.orders) {
+				orderList = response.orders
+				paginationData = response.pagination || paginationData
+			} else if (Array.isArray(response)) {
+				orderList = response
+			} else if (response && Array.isArray(response.data)) {
+				orderList = response.data
+			} else {
+				console.warn('Unexpected orders response format:', response)
+				orderList = []
+			}
+			
+			setOrders(orderList)
+			setPagination(paginationData)
+			
+			if (orderList.length === 0) {
+				console.log('No orders found')
+			}
+		} catch (error) {
+			console.error('Error fetching orders:', error)
+			const errorMessage = error?.data?.message || error?.message || 'Failed to load orders'
+			toast.error(errorMessage)
+			setOrders([])
+		} finally {
+			setLoading(false)
+		}
+	}
 
-    const getStatusBadge = (status) => {
-        const statusColors = {
-            pending: 'warning',
-            processing: 'info',
-            completed: 'success',
-            cancelled: 'danger'
-        }
-        return `badge bg-${statusColors[status] || 'secondary'}`
-    }
+	const handleStatusUpdate = async (orderId, newStatus) => {
+		try {
+			setUpdatingOrder(orderId)
+			const response = await updateOrderStatusApi({
+				token,
+				orderId,
+				status: newStatus
+			})
 
-    const formatDate = (dateString) => {
-        return new Date(dateString).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        })
-    }
+			if (response.success) {
+				toast.success('Order status updated successfully')
+				setOrders(orders.map(order =>
+					order._id === orderId ? { ...order, status: newStatus } : order
+				))
+			}
+		} catch (error) {
+			console.error('Error updating order status:', error)
+			toast.error(error.message || 'Failed to update order status')
+		} finally {
+			setUpdatingOrder(null)
+			setAnchorEl(null)
+		}
+	}
 
-    return (
-        <>
-            <MetaData title="Order Management" />
-            <Header />
-            <div className="container-fluid" style={{ minHeight: '80vh', paddingTop: '2rem', paddingBottom: '2rem' }}>
-                <div className="row">
-                    <div className="col-12">
-                        <div className="d-flex justify-content-between align-items-center mb-4">
-                            <h2>Order Management</h2>
-                            <Link to="/admin" className="btn btn-outline-secondary">
-                                <i className="fa fa-arrow-left mr-2"></i>Back to Dashboard
-                            </Link>
-                        </div>
+	const handleFilterChange = (key, value) => {
+		setFilters(prev => ({
+			...prev,
+			[key]: value,
+			page: key === 'page' ? value : 1
+		}))
+	}
 
-                        {loading ? (
-                            <div className="text-center">
-                                <div className="spinner-border" role="status">
-                                    <span className="visually-hidden">Loading...</span>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="table-responsive">
-                                <table className="table table-striped table-hover">
-                                    <thead className="table-dark">
-                                        <tr>
-                                            <th>Order ID</th>
-                                            <th>Customer</th>
-                                            <th>Email</th>
-                                            <th>Items</th>
-                                            <th>Total</th>
-                                            <th>Status</th>
-                                            <th>Date</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {orders.map((order) => (
-                                            <tr key={order._id}>
-                                                <td><strong>{order.orderId}</strong></td>
-                                                <td>{order.customer}</td>
-                                                <td>{order.email}</td>
-                                                <td>{order.items}</td>
-                                                <td>${order.total.toFixed(2)}</td>
-                                                <td>
-                                                    <span className={getStatusBadge(order.status)}>
-                                                        {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                                                    </span>
-                                                </td>
-                                                <td>{formatDate(order.createdAt)}</td>
-                                                <td>
-                                                    <div className="dropdown">
-                                                        <button 
-                                                            className="btn btn-sm btn-outline-primary dropdown-toggle" 
-                                                            type="button" 
-                                                            data-bs-toggle="dropdown"
-                                                        >
-                                                            Actions
-                                                        </button>
-                                                        <ul className="dropdown-menu">
-                                                            <li>
-                                                                <button 
-                                                                    className="dropdown-item" 
-                                                                    onClick={() => updateOrderStatus(order._id, 'processing')}
-                                                                    disabled={order.status === 'processing'}
-                                                                >
-                                                                    Mark as Processing
-                                                                </button>
-                                                            </li>
-                                                            <li>
-                                                                <button 
-                                                                    className="dropdown-item" 
-                                                                    onClick={() => updateOrderStatus(order._id, 'completed')}
-                                                                    disabled={order.status === 'completed'}
-                                                                >
-                                                                    Mark as Completed
-                                                                </button>
-                                                            </li>
-                                                            <li>
-                                                                <button 
-                                                                    className="dropdown-item text-danger" 
-                                                                    onClick={() => updateOrderStatus(order._id, 'cancelled')}
-                                                                    disabled={order.status === 'cancelled'}
-                                                                >
-                                                                    Cancel Order
-                                                                </button>
-                                                            </li>
-                                                        </ul>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                                
-                                {orders.length === 0 && (
-                                    <div className="text-center py-5">
-                                        <i className="fa fa-shopping-bag fa-3x text-muted mb-3"></i>
-                                        <h5 className="text-muted">No orders found</h5>
-                                        <p className="text-muted">Orders will appear here when customers place them.</p>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-            <Footer />
-        </>
-    )
+	const handleMenuOpen = (event, orderId) => {
+		setAnchorEl(event.currentTarget)
+		setSelectedOrderId(orderId)
+	}
+
+	const handleMenuClose = () => {
+		setAnchorEl(null)
+		setSelectedOrderId(null)
+	}
+
+	const getStatusColor = (status) => {
+		const colors = {
+			pending: 'warning',
+			processing: 'info',
+			shipped: 'primary',
+			delivered: 'success',
+			cancelled: 'error'
+		}
+		return colors[status] || 'default'
+	}
+
+	const getStatusOptions = (currentStatus) => {
+		const allStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled']
+		return allStatuses.filter(status => status !== currentStatus)
+	}
+
+	// Transform orders for DataGrid
+	const rows = orders.map((order, index) => {
+		const transformedRow = {
+			id: order._id || order.id || `temp-order-${index}`,
+			orderNumber: order.orderNumber || `ORD-${index + 1}`,
+			customerName: order.customerDetails?.name || order.customer?.name || 'N/A',
+			customerEmail: order.customerDetails?.email || order.customer?.email || 'N/A',
+			itemsCount: order.orderLines?.length || order.items?.length || 0,
+			totalAmount: typeof order.totalAmount === 'number' ? order.totalAmount : parseFloat(order.totalAmount) || 0,
+			status: order.status || 'pending',
+			createdAt: order.createdAt || new Date().toISOString()
+		}
+		return transformedRow
+	})
+
+	const columns = [
+		{
+			field: 'orderNumber',
+			headerName: 'Order ID',
+			width: 150,
+			renderCell: (params) => (
+				<strong style={{ color: '#1976d2' }}>{params.value}</strong>
+			)
+		},
+		{
+			field: 'customerName',
+			headerName: 'Customer',
+			flex: 1,
+			minWidth: 150
+		},
+		{
+			field: 'customerEmail',
+			headerName: 'Email',
+			flex: 1,
+			minWidth: 180
+		},
+		{
+			field: 'itemsCount',
+			headerName: 'Items',
+			width: 90,
+			align: 'center',
+			headerAlign: 'center'
+		},
+		{
+			field: 'totalAmount',
+			headerName: 'Total',
+			width: 120,
+			renderCell: (params) => {
+				const amount = typeof params.value === 'number' ? params.value : parseFloat(params.value) || 0
+				return `₱${amount.toFixed(2)}`
+			}
+		},
+		{
+			field: 'status',
+			headerName: 'Status',
+			width: 130,
+			renderCell: (params) => (
+				<Chip
+					label={params.value.charAt(0).toUpperCase() + params.value.slice(1)}
+					color={getStatusColor(params.value)}
+					size="small"
+				/>
+			)
+		},
+		{
+			field: 'createdAt',
+			headerName: 'Date',
+			width: 150,
+			renderCell: (params) => {
+				if (!params.value) return 'No Date'
+				try {
+					const date = new Date(params.value)
+					if (isNaN(date.getTime())) return 'Invalid Date'
+					return date.toLocaleDateString('en-US', {
+						year: 'numeric',
+						month: 'short',
+						day: 'numeric'
+					})
+				} catch (error) {
+					return 'Invalid Date'
+				}
+			}
+		},
+		{
+			field: 'actions',
+			headerName: 'Actions',
+			width: 100,
+			sortable: false,
+			renderCell: (params) => (
+				<Box>
+					<IconButton
+						size="small"
+						onClick={(e) => handleMenuOpen(e, params.row.id)}
+						disabled={updatingOrder === params.row.id}
+					>
+						{updatingOrder === params.row.id ? (
+							<span className="spinner-border spinner-border-sm" />
+						) : (
+							<MoreIcon />
+						)}
+					</IconButton>
+				</Box>
+			)
+		}
+	]
+
+	return (
+		<>
+			<MetaData title="Order Management" />
+
+			<div className="d-flex">
+				{/* Sidebar */}
+				<div className="col-md-3 col-lg-2 p-0">
+					<SideBar />
+				</div>
+
+				{/* Main Content */}
+				<div className="col-md-9 col-lg-10 p-0">
+					<div className="container-fluid" style={{ minHeight: '100vh', paddingTop: '2rem', paddingBottom: '2rem', backgroundColor: '#f8f9fa' }}>
+						<div className="d-flex justify-content-between align-items-center mb-4">
+							<h2>Order Management</h2>
+							<Button
+								component={Link}
+								to="/admin"
+								variant="outlined"
+								startIcon={<ArrowBack />}
+							>
+								Back to Dashboard
+							</Button>
+						</div>
+
+						{/* Filters */}
+						<Box sx={{ mb: 3, p: 2, backgroundColor: 'white', borderRadius: 2 }}>
+							<Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+								<FormControl sx={{ minWidth: 200 }}>
+									<InputLabel>Status Filter</InputLabel>
+									<Select
+										value={filters.status}
+										onChange={(e) => handleFilterChange('status', e.target.value)}
+										label="Status Filter"
+									>
+										<MenuItem value="all">All Orders</MenuItem>
+										<MenuItem value="pending">Pending</MenuItem>
+										<MenuItem value="processing">Processing</MenuItem>
+										<MenuItem value="shipped">Shipped</MenuItem>
+										<MenuItem value="delivered">Delivered</MenuItem>
+										<MenuItem value="cancelled">Cancelled</MenuItem>
+									</Select>
+								</FormControl>
+
+								<TextField
+									label="Search"
+									placeholder="Search by order number, customer..."
+									value={filters.search}
+									onChange={(e) => handleFilterChange('search', e.target.value)}
+									sx={{ flexGrow: 1, minWidth: 300 }}
+								/>
+
+								<FormControl sx={{ minWidth: 100 }}>
+									<InputLabel>Per Page</InputLabel>
+									<Select
+										value={filters.limit}
+										onChange={(e) => handleFilterChange('limit', parseInt(e.target.value))}
+										label="Per Page"
+									>
+										<MenuItem value={10}>10</MenuItem>
+										<MenuItem value={25}>25</MenuItem>
+										<MenuItem value={50}>50</MenuItem>
+									</Select>
+								</FormControl>
+							</Box>
+						</Box>
+
+						{loading ? (
+							<Loader />
+						) : (
+							<Box sx={{ height: 600, width: '100%', backgroundColor: 'white', borderRadius: 2 }}>
+								<DataGrid
+									rows={rows}
+									columns={columns}
+									initialState={{
+										pagination: {
+											paginationModel: { page: 0, pageSize: filters.limit }
+										}
+									}}
+									pageSizeOptions={[10, 25, 50]}
+									disableRowSelectionOnClick
+									loading={loading}
+									getRowId={(row) => row.id}
+									localeText={{
+										noRowsLabel: 'No orders found. Orders will appear here when customers place them.'
+									}}
+									sx={{
+										'& .MuiDataGrid-cell:focus': {
+											outline: 'none'
+										},
+										'& .MuiDataGrid-row:hover': {
+											backgroundColor: 'rgba(0, 0, 0, 0.04)'
+										},
+										'& .MuiDataGrid-overlay': {
+											backgroundColor: 'transparent'
+										}
+									}}
+								/>
+							</Box>
+						)}
+
+						{/* Status Update Menu */}
+						<Menu
+							anchorEl={anchorEl}
+							open={Boolean(anchorEl)}
+							onClose={handleMenuClose}
+						>
+							{selectedOrderId && getStatusOptions(
+								orders.find(o => o._id === selectedOrderId)?.status
+							).map(status => (
+								<MenuItem
+									key={status}
+									onClick={() => handleStatusUpdate(selectedOrderId, status)}
+								>
+									Mark as {status.charAt(0).toUpperCase() + status.slice(1)}
+								</MenuItem>
+							))}
+						</Menu>
+					</div>
+				</div>
+			</div>
+		</>
+	)
 }

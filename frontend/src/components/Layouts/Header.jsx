@@ -31,30 +31,72 @@ const Header = () => {
 
     return (
         <>
-            <nav className="navbar row">
-                <div className="col-12 col-md-3">
-                    <div className="navbar-brand">
-                        <Link to="/products" style={{ textDecoration: 'none' }}>
+            <nav
+                style={{
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    padding: '0.5rem 1.5rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '1rem',
+                    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
+                    marginBottom: 0,
+                    minHeight: '52px'
+                }}
+            >
+                {/* Logo */}
+                <div
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        minWidth: '120px'
+                    }}
+                >
+                    {user && user.role === 'admin' ? (
+                        <Link to="/admin" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
                             <img
                                 src="/images/logo.jpg"
                                 alt="Kitchenatics Logo"
-                                className="site-logo"
+                                style={{ height: '32px', width: 'auto', objectFit: 'contain' }}
                                 loading="lazy"
                                 onError={(e) => { e.target.onerror = null; e.target.src = '/images/logo.jpg' }}
-                                style={{ objectFit: 'contain' }}
                             />
                         </Link>
+                    ) : (
+                        <Link to="/products" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+                            <img
+                                src="/images/logo.jpg"
+                                alt="Kitchenatics Logo"
+                                style={{ height: '32px', width: 'auto', objectFit: 'contain' }}
+                                loading="lazy"
+                                onError={(e) => { e.target.onerror = null; e.target.src = '/images/logo.jpg' }}
+                            />
+                        </Link>
+                    )}
+                </div>
+
+                {/* Search Bar (User only) */}
+                {user && user.role !== 'admin' && (
+                    <div style={{ flex: 1, maxWidth: '400px' }}>
+                        <Search />
                     </div>
-                </div>
-                <div className="col-12 col-md-6">
-                    <Search />
-                </div>
-                <div className="col-12 col-md-3 mt-4 mt-md-0 text-center d-flex align-items-center justify-content-end">
+                )}
+
+                {/* Right side: User menu & Cart */}
+                <div
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '1.5rem',
+                        marginLeft: 'auto'
+                    }}
+                >
                     {user ? (
-                        <div className="d-flex align-items-center">
+                        <>
+                            {/* User Dropdown */}
                             <div className="dropdown">
                                 <button
-                                    className="btn dropdown-toggle text-white"
+                                    className="btn dropdown-toggle"
                                     type="button"
                                     id="dropDownMenuButton"
                                     data-toggle="dropdown"
@@ -64,31 +106,49 @@ const Header = () => {
                                         background: 'rgba(255, 255, 255, 0.2)',
                                         border: '1px solid rgba(255, 255, 255, 0.3)',
                                         borderRadius: '25px',
-                                        padding: '8px 15px',
+                                        padding: '6px 12px',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '10px'
+                                        gap: '8px',
+                                        color: 'white',
+                                        fontSize: '14px',
+                                        transition: 'all 0.3s'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.target.style.background = 'rgba(255, 255, 255, 0.3)'
+                                        e.target.style.borderColor = 'rgba(255, 255, 255, 0.5)'
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.target.style.background = 'rgba(255, 255, 255, 0.2)'
+                                        e.target.style.borderColor = 'rgba(255, 255, 255, 0.3)'
                                     }}
                                 >
-                                    <figure className="avatar avatar-nav mb-0">
-                                        <img
-                                            src={user.avatar && user.avatar.url ? user.avatar.url : '/images/logo.jpg'}
-                                            alt={user && user.name ? user.name : 'User'}
-                                            className="rounded-circle user-avatar"
-                                            loading="lazy"
-                                            onError={(e) => { e.target.onerror = null; e.target.src = '/images/logo.jpg' }}
-                                        />
-                                    </figure>
+                                    <img
+                                        src={user.avatar && user.avatar.url ? user.avatar.url : '/images/logo.jpg'}
+                                        alt={user && user.name ? user.name : 'User'}
+                                        style={{
+                                            width: '28px',
+                                            height: '28px',
+                                            borderRadius: '50%',
+                                            objectFit: 'cover'
+                                        }}
+                                        loading="lazy"
+                                        onError={(e) => { e.target.onerror = null; e.target.src = '/images/logo.jpg' }}
+                                    />
                                     <span>{user && user.name ? user.name : 'User'}</span>
                                 </button>
 
                                 <div className="dropdown-menu" aria-labelledby="dropDownMenuButton">
                                     {user && user.role === 'admin' && (
-                                        <Link className="dropdown-item" to="/admin">Dashboard</Link>
+                                        <Link className="dropdown-item" to="/admin">
+                                            <i className="fa fa-tachometer mr-2"></i>Dashboard
+                                        </Link>
                                     )}
-                                    <Link className="dropdown-item" to="/orders/me">
-                                        <i className="fa fa-list-alt mr-2"></i>Orders
-                                    </Link>
+                                    {user && user.role !== 'admin' && (
+                                        <Link className="dropdown-item" to="/user/orders">
+                                            <i className="fa fa-list-alt mr-2"></i>Orders
+                                        </Link>
+                                    )}
                                     <Link className="dropdown-item" to="/me">
                                         <i className="fa fa-user mr-2"></i>Profile
                                     </Link>
@@ -102,17 +162,73 @@ const Header = () => {
                                     </Link>
                                 </div>
                             </div>
-                            <Link to="/cart" style={{ textDecoration: 'none', marginLeft: '15px' }}>
-                                <i className="fa fa-shopping-cart mr-1"></i>
-                                <span id="cart">Cart</span>
-                                {getCartItemCount() > 0 && (
-                                    <span className="ml-1" id="cart_count">{getCartItemCount()}</span>
-                                )}
-                            </Link>
-                        </div>
+
+                            {/* Cart Link (User only) */}
+                            {user && user.role !== 'admin' && (
+                                <Link
+                                    to="/cart"
+                                    style={{
+                                        textDecoration: 'none',
+                                        color: 'white',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        fontSize: '14px',
+                                        transition: 'color 0.3s'
+                                    }}
+                                    onMouseEnter={(e) => { e.target.style.color = '#f0f0f0' }}
+                                    onMouseLeave={(e) => { e.target.style.color = 'white' }}
+                                >
+                                    <i className="fa fa-shopping-cart"></i>
+                                    <span>Cart</span>
+                                    {getCartItemCount() > 0 && (
+                                        <span
+                                            style={{
+                                                background: '#ff6b6b',
+                                                color: 'white',
+                                                borderRadius: '50%',
+                                                padding: '2px 6px',
+                                                fontSize: '12px',
+                                                fontWeight: 'bold',
+                                                marginLeft: '4px'
+                                            }}
+                                        >
+                                            {getCartItemCount()}
+                                        </span>
+                                    )}
+                                </Link>
+                            )}
+                        </>
                     ) : (
-                        <Link to="/login" className="btn" id="login_btn">
-                            <i className="fa fa-sign-in mr-2"></i>Login
+                        <Link
+                            to="/login"
+                            style={{
+                                textDecoration: 'none',
+                                background: 'white',
+                                color: '#667eea',
+                                border: 'none',
+                                borderRadius: '25px',
+                                padding: '8px 20px',
+                                fontWeight: '600',
+                                fontSize: '14px',
+                                transition: 'all 0.3s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.target.style.background = '#f8f9fa'
+                                e.target.style.transform = 'translateY(-2px)'
+                                e.target.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.1)'
+                            }}
+                            onMouseLeave={(e) => {
+                                e.target.style.background = 'white'
+                                e.target.style.transform = 'translateY(0)'
+                                e.target.style.boxShadow = 'none'
+                            }}
+                        >
+                            <i className="fa fa-sign-in"></i>
+                            <span>Login</span>
                         </Link>
                     )}
                 </div>

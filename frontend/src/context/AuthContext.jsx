@@ -7,7 +7,7 @@ const USER_KEY = 'auth_user'
 
 export function AuthProvider({ children }) {
 	const [token, setToken] = useState(null)
-	const [user, setUser] = useState(null) // { id, email, role, emailVerified, avatar, phone, address, zipCode, gender, dateOfBirth }
+	const [user, setUser] = useState(null)
 	const [loading, setLoading] = useState(true)
 
 	useEffect(() => {
@@ -34,7 +34,14 @@ export function AuthProvider({ children }) {
 		localStorage.removeItem(USER_KEY)
 	}, [])
 
-	const value = useMemo(() => ({ token, user, loading, isAuthenticated: Boolean(token && user), login, logout }), [token, user, loading, login, logout])
+	const value = useMemo(() => ({ 
+		token, 
+		user, 
+		loading, 
+		isAuthenticated: Boolean(token && user && user.isActive !== false), 
+		login, 
+		logout
+	}), [token, user, loading, login, logout])
 
 	return (
 		<AuthContext.Provider value={value}>

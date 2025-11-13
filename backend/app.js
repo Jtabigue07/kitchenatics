@@ -8,6 +8,7 @@ const auth = require('./routes/auth');
 const order = require('./routes/order');
 const admin = require('./routes/admin');
 const cart = require('./routes/cart');
+const receipt = require('./routes/receipt');
 
 
 
@@ -18,11 +19,13 @@ app.use(express.urlencoded({limit: "50mb", extended: true }));
 app.use('/api/v1', products);
 // Mount auth routes under /api/v1/auth so frontend paths like /api/v1/auth/register match
 app.use('/api/v1/auth', auth);
-app.use('/api/v1', order);
+app.use('/api/v1/orders', order);
 // Admin routes (user management)
 app.use('/api/v1/admin', admin);
 // Cart routes
 app.use('/api/v1/cart', cart);
+// Receipt routes
+app.use('/api/v1/receipt', receipt);
 
 
 // Health check: verify Cloudinary credentials/connectivity

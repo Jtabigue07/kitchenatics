@@ -17,7 +17,7 @@ exports.addToCart = async (req, res) => {
         }
 
         // Find or create cart
-        let cart = await Cart.findOne({ user: userId }).populate('items.product');
+        let cart = await Cart.findOne({ user: userId });
 
         if (!cart) {
             cart = new Cart({
@@ -28,7 +28,7 @@ exports.addToCart = async (req, res) => {
 
         // Check if product already in cart
         const existingItemIndex = cart.items.findIndex(
-            item => item.product._id.toString() === productId
+            item => item.product && item.product.toString() === productId
         );
 
         if (existingItemIndex > -1) {
@@ -48,7 +48,13 @@ exports.addToCart = async (req, res) => {
         }
 
         await cart.save();
-        await cart.populate('items.product');
+
+        // Try to populate but don't fail if it doesn't work
+        try {
+            await cart.populate('items.product');
+        } catch (e) {
+            console.warn('Populate warning in addToCart:', e.message);
+        }
 
         res.status(200).json({
             success: true,
@@ -60,7 +66,8 @@ exports.addToCart = async (req, res) => {
         console.error('Add to cart error:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to add item to cart'
+            message: 'Failed to add item to cart',
+            error: error.message
         });
     }
 };
@@ -70,12 +77,33 @@ exports.getCart = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const cart = await Cart.findOne({ user: userId }).populate('items.product');
-
+        // First check if cart exists
+        let cart = await Cart.findOne({ user: userId });
+        
         if (!cart) {
+            // Return empty cart if none exists
             return res.status(200).json({
                 success: true,
                 cart: { items: [], totalPrice: 0 }
+            });
+        }
+
+        // Populate product details with error handling
+        try {
+            cart = await Cart.findOne({ user: userId }).populate({
+                path: 'items.product',
+                model: 'Product',
+                select: 'name price brand category images'
+            });
+        } catch (populateError) {
+            // If populate fails, return cart without populated products
+            console.warn('Cart populate error (returning basic cart):', populateError.message);
+            return res.status(200).json({
+                success: true,
+                cart: {
+                    items: cart.items || [],
+                    totalPrice: cart.totalPrice || 0
+                }
             });
         }
 
@@ -88,7 +116,8 @@ exports.getCart = async (req, res) => {
         console.error('Get cart error:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to get cart'
+            message: 'Failed to retrieve cart',
+            error: error.message
         });
     }
 };
@@ -129,7 +158,13 @@ exports.updateCartItem = async (req, res) => {
 
         cart.items[itemIndex].quantity = quantity;
         await cart.save();
-        await cart.populate('items.product');
+
+        // Try to populate but don't fail if it doesn't work
+        try {
+            await cart.populate('items.product');
+        } catch (e) {
+            console.warn('Populate warning in updateCartItem:', e.message);
+        }
 
         res.status(200).json({
             success: true,
@@ -141,7 +176,8 @@ exports.updateCartItem = async (req, res) => {
         console.error('Update cart item error:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to update cart item'
+            message: 'Failed to update cart item',
+            error: error.message
         });
     }
 };
@@ -166,7 +202,13 @@ exports.removeFromCart = async (req, res) => {
         );
 
         await cart.save();
-        await cart.populate('items.product');
+
+        // Try to populate but don't fail if it doesn't work
+        try {
+            await cart.populate('items.product');
+        } catch (e) {
+            console.warn('Populate warning in removeFromCart:', e.message);
+        }
 
         res.status(200).json({
             success: true,
@@ -178,7 +220,8 @@ exports.removeFromCart = async (req, res) => {
         console.error('Remove from cart error:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to remove item from cart'
+            message: 'Failed to remove item from cart',
+            error: error.message
         });
     }
 };
@@ -199,7 +242,8 @@ exports.clearCart = async (req, res) => {
         console.error('Clear cart error:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to clear cart'
+            message: 'Failed to clear cart',
+            error: error.message
         });
     }
 };

@@ -182,3 +182,65 @@ export function removeFromCartApi({ token, itemId }) {
 export function clearCartApi({ token }) {
 	return request('/cart', { method: 'DELETE', token })
 }
+
+// Order API functions
+export function createOrderApi({ token, paymentMethod, notes }) {
+	return request('/checkout', { method: 'POST', token, body: { paymentMethod, notes } })
+}
+
+export function getUserOrdersApi({ token, page = 1, limit = 10 }) {
+	let queryParams = []
+	if (page) queryParams.push(`page=${page}`)
+	if (limit) queryParams.push(`limit=${limit}`)
+	const query = queryParams.length > 0 ? `?${queryParams.join('&')}` : ''
+	return request(`/orders/my-orders${query}`, { method: 'GET', token })
+}
+
+export function getOrderDetailsApi({ token, orderId }) {
+	return request(`/orders/${orderId}`, { method: 'GET', token })
+}
+
+export function updateOrderStatusApi({ token, orderId, status, notes }) {
+	return request(`/orders/${orderId}/status`, { method: 'PUT', token, body: { status, notes } })
+}
+
+// Receipt API functions
+export async function downloadReceiptApi({ token, orderId }) {
+	const url = `/receipt/download/${orderId}`.startsWith('http') ? `/receipt/download/${orderId}` : `${API}/receipt/download/${orderId}`
+	const response = await fetch(url, {
+		method: 'GET',
+		headers: {
+			'Authorization': `Bearer ${token}`,
+		}
+	})
+
+	if (!response.ok) {
+		let errorData
+		try {
+			errorData = await response.json()
+		} catch (e) {
+			errorData = { message: 'Failed to download receipt' }
+		}
+		throw new Error(errorData.message || 'Failed to download receipt')
+	}
+
+	return response.blob()
+}
+
+export function getReceiptStatusApi({ token, orderId }) {
+	return request(`/receipt/status/${orderId}`, { method: 'GET', token })
+}
+
+export function getAllOrdersApi({ token, page = 1, limit = 10, status, search }) {
+	let queryParams = []
+	if (page) queryParams.push(`page=${page}`)
+	if (limit) queryParams.push(`limit=${limit}`)
+	if (status && status !== 'all') queryParams.push(`status=${status}`)
+	if (search) queryParams.push(`search=${encodeURIComponent(search)}`)
+	const query = queryParams.length > 0 ? `?${queryParams.join('&')}` : ''
+	return request(`/orders/admin/all${query}`, { method: 'GET', token })
+}
+
+export function getAdminOrderDetailsApi({ token, orderId }) {
+	return request(`/orders/admin/${orderId}`, { method: 'GET', token })
+}

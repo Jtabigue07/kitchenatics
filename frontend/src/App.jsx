@@ -1,5 +1,8 @@
 import './App.css'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { ThemeProvider } from '@mui/material/styles'
+import CssBaseline from '@mui/material/CssBaseline'
+import theme from './theme'
 import { AuthProvider } from './context/AuthContext'
 import { CartProvider } from './context/CartContext'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -13,6 +16,8 @@ import UserDashboard from './components/User/Dashboard'
 import ProductsHome from './components/User/ProductsHome'
 import Cart from './components/User/Cart'
 import Profile from './components/User/Profile'
+import OrderHistory from './components/User/OrderHistory'
+import OrderDetails from './components/User/OrderDetails'
 import AdminDashboard from './components/Admin/Dashboard'
 import ProductManagement from './components/Admin/ProductManagement'
 import OrderManagement from './components/Admin/OrderManagement'
@@ -20,10 +25,12 @@ import UserManagement from './components/Admin/UserManagement'
 
 function App() {
 	return (
-		<BrowserRouter>
-			<AuthProvider>
-				<CartProvider>
-					<Routes>
+		<ThemeProvider theme={theme}>
+			<CssBaseline />
+			<BrowserRouter>
+				<AuthProvider>
+					<CartProvider>
+						<Routes>
 						<Route path="/" element={<Navigate to="/login" replace />} />
 						<Route path="/register" element={<Register />} />
 						<Route path="/login" element={<Login />} />
@@ -34,10 +41,15 @@ function App() {
 
 						<Route element={<ProtectedRoute requireRole="user" />}>
 							<Route path="/user" element={<UserDashboard />} />
-							<Route path="/me" element={<Profile />} />
 							<Route path="/products" element={<ProductsHome />} />
 							<Route path="/home" element={<ProductsHome />} />
 							<Route path="/cart" element={<Cart />} />
+							<Route path="/user/orders" element={<OrderHistory />} />
+							<Route path="/order/:orderId" element={<OrderDetails />} />
+						</Route>
+
+						<Route element={<ProtectedRoute />}>
+							<Route path="/me" element={<Profile />} />
 						</Route>
 
 						<Route element={<ProtectedRoute requireRole="admin" />}>
@@ -48,10 +60,11 @@ function App() {
 						</Route>
 
 						<Route path="*" element={<Navigate to="/login" replace />} />
-					</Routes>
-				</CartProvider>
-			</AuthProvider>
-		</BrowserRouter>
+						</Routes>
+					</CartProvider>
+				</AuthProvider>
+			</BrowserRouter>
+		</ThemeProvider>
 	)
 }
 export default App
